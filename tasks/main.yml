@@ -1,0 +1,65 @@
+
+# ------------------------------------------------------------------------------
+# install etcd binary
+# ------------------------------------------------------------------------------
+
+- name: download and extract etcd binary
+  unarchive:
+    src: https://github.com/etcd-io/etcd/releases/download/v3.4.15/etcd-v3.4.15-linux-amd64.tar.gz
+    dest: /usr/local/bin
+    remote_src: yes
+
+- name: rename etcd binary
+  copy:
+    src: /usr/local/bin/etcd-v3.4.15-linux-amd64/etcd
+    dest: /usr/local/bin/etcd
+    mode: 750
+    remote_src: yes
+
+- name: create etcd necessary directories
+  become: yes
+  file:
+    path: "{{ directory.path }}"
+    state: directory
+    mode: "{{ directory.mode }}"
+  loop:
+    - path: /etc/etcd
+      mode: 755
+    - path: /var/lib/etcd
+      mode: 700
+  loop_control:
+    loop_var: directory
+
+# ------------------------------------------------------------------------------
+# copy certificates
+# ------------------------------------------------------------------------------
+
+- name: copy certificates from root to etcd directory
+  become: yes
+  copy:
+    remote_src: yes
+    src: "/root/{{ certificate }}"
+    dest: "/etc/etcd/{{ certificate }}"
+  loop:
+    - ca.pem
+    - kubernetes-key.pem
+    - kubernetes.pem
+  loop_control:
+    loop_var: certificate
+
+# ------------------------------------------------------------------------------
+# configure etcd daemon
+# ------------------------------------------------------------------------------
+
+- name: templates out etcd systemd daemon file
+  become: yes
+  template:
+    src: etcd.service.j2
+    dest: /etc/systemd/system/etcd.service
+
+- name: start, enable and reload etcd systemd service
+  systemd:
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+    name: etcd
